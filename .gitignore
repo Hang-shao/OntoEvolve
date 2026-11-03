@@ -1,0 +1,40 @@
+# 凭据与本地配置
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# 数据与缓存（详见 data/README.md）
+data/cache/
+data/cache_*/
+data/temp/
+data/processed/
+data/ontology/
+data/track4/
+data/annotation/
+
+# 结果与日志（不入库，靠脚本重跑）
+results/
+logs/
+
+# 第三方件与构建产物
+vendor/
+build/
+dist/
+
+# 编辑器
+.idea/
+.vscode/
+.DS_Store
+
+# 本地缓存与临时产物
+cache/
+x.jsonl

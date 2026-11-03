@@ -1,0 +1,11 @@
+# 仅放工具配置。本仓库按「在仓库根目录直接运行」的方式使用，不做打包安装：
+# 所有脚本都以 `python experiments/xxx.py` 启动，靠 sys.path 插入仓库根来 import `src`。
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "slow: 端到端冒烟（数十秒量级），默认也运行；`-m 'not slow'` 可跳过",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]

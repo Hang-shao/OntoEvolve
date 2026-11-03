@@ -1,0 +1,14 @@
+# 核心依赖（论文 4.1 节的实测环境：Python 3.12.7）
+# 安装：pip install -r requirements.txt
+numpy==1.26.4
+scipy==1.13.1
+scikit-learn==1.5.1
+matplotlib==3.9.2
+requests==2.32.3
+rdflib==7.6.0
+owlready2==0.51
+psutil==5.9.0
+Pillow==12.3.0
+
+# 测试
+pytest>=8

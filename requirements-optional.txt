@@ -1,0 +1,8 @@
+# 可选依赖：只有用到对应功能时才需要
+#
+# 1) 本地嵌入（src/local_embed.py）：不配嵌入服务、又要复现 1024 维 Qwen3-Embedding 时使用
+torch==2.12.0
+transformers==5.13.1
+#
+# 2) z3 降级一致性检查（src/consistency.py 的受限 SMT 近似；没装时自动退回结构检查 + 推理机）
+z3-solver>=4.12
