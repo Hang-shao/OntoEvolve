@@ -1,17 +1,19 @@
 # -*- coding: utf-8 -*-
 """基线校准协议因子实验：网格 × 标定流数 × 标定期告警抑制窗口。
 
-八个格子：
-  G0 原网格 / 1 流 / cooldown 3   —— V23 复现（必须对上 Table 2）
-  G1 原网格 / 1 流 / cooldown 99  —— 只修标定期抑制窗口
-  G2 扩展网格 / 1 流 / cooldown 3
-  G3 扩展网格 / 1 流 / cooldown 99
-  G4 原网格 / 2 流 / cooldown 3
-  G5 原网格 / 2 流 / cooldown 99  —— 文档宣称的协议
-  G6 扩展网格 / 2 流 / cooldown 3
-  G7 扩展网格 / 2 流 / cooldown 99  —— 主表候选
+十字（以 CELLS 为准；标定一律 mode="legacy"，即 inc_clustering 分轮搜索）：
+  G0 原网格 / 1 流 / cooldown 3 / 容差 2   —— V23 实际执行口径（必须对上 Table 2）
+  G1 原网格 / 1 流 / cooldown 99 / 容差 2  —— 只修标定期抑制窗口
+  G2 原网格 / 1 流 / cooldown 3 / 容差 3   —— 只修标定期匹配容差
+  G3 原网格 / 1 流 / cooldown 99 / 容差 3  —— 论文宣称的标定口径
+  G4 扩展网格 / 1 流 / cooldown 99 / 容差 3
+  G5 原网格 / 2 流 / cooldown 99 / 容差 3
+  G6 扩展网格 / 2 流 / cooldown 99 / 容差 3 —— 主表候选
+  G7 扩展网格 / 1 流 / cooldown 3 / 容差 2
+  G8 扩展网格 / 2 流 / cooldown 3 / 容差 2
+  G9 原网格 / 2 流 / cooldown 3 / 容差 2
 
-本方法固定双流 + V23 参数，在四格中各自跑一次作为审计探针。
+本方法固定 V23 参数，每格各跑一次作为审计探针（同一批测试流上，十格应完全相同）。
 """
 from __future__ import annotations
 
@@ -82,7 +84,7 @@ def f1_method(onto, l2c, stream, p05):
     res, _ = evaluate(stream, onto, l2c, BEST_PARAMS,
                       link_offset=BEST_OFFSET, base_p05=p05,
                       cooldown=COOLDOWN_TEST)
-    return float(res.macro_f1)
+    return res
 
 
 def load_best():
@@ -103,6 +105,8 @@ def main() -> int:
     ap.add_argument("--out", default=str(C.DIR_RESULTS / "baseline_protocol.json"))
     ap.add_argument("--csv", default=str(C.DIR_RESULTS / "baseline_protocol.csv"))
     ap.add_argument("--cells", default="", help="逗号分隔，默认全部")
+    ap.add_argument("--detail", default="",
+                    help="若给出，另存含 per_type/counts 的完整记录")
     args = ap.parse_args()
 
     t0 = time.time()
@@ -158,24 +162,41 @@ def main() -> int:
                       "n_alarms": [int(r.n_alarms) for r in rres]}
             cell[method] = {"kw": kw["kw"], "calib_f1": kw["macro_f1"],
                             "n_evals": kw["n_evals"], "per_repeat": per,
-                            "mean": mean,
+                            "mean": mean, "per_type": per_type,
+                            "counts": counts,
                             "seconds": round(time.time() - t1, 1)}
             print(f"[{name}] {method:<14} kw={kw['kw']} calib={kw['macro_f1']:.4f} "
                   f"test={mean:.4f}")
         # 本方法：固定 V23 参数，四格各跑一次作审计探针
-        per_m = [f1_method(t["onto"], t["leaf_to_cid"], t["stream"], t["p05"])
-                 for t in tests]
-        cell["ontoevolve"] = {"kw": {}, "calib_f1": None,
-                              "per_repeat": per_m,
-                              "mean": sum(per_m) / len(per_m)}
+        mres = [f1_method(t["onto"], t["leaf_to_cid"], t["stream"], t["p05"])
+                for t in tests]
+        per_m = [float(r.macro_f1) for r in mres]
+        cell["ontoevolve"] = {
+            "kw": {}, "calib_f1": None, "per_repeat": per_m,
+            "mean": sum(per_m) / len(per_m),
+            "per_type": {k: [float(r.per_type[k]["f1"]) for r in mres]
+                         for k in mres[0].per_type},
+            "counts": {"tp": [int(r.tp) for r in mres],
+                       "fp": [int(r.fp) for r in mres],
+                       "fn": [int(r.fn) for r in mres],
+                       "n_alarms": [int(r.n_alarms) for r in mres]}}
         print(f"[{name}] ontoevolve     test={cell['ontoevolve']['mean']:.4f}")
         results[name] = {"config": {"grid": grid_key, "n_streams": n_streams,
                                     "calib_cooldown": calib_cd,
                                     "calib_tolerance": calib_tol},
                          "methods": cell}
 
-    Path(args.out).write_text(json.dumps(results, indent=1, ensure_ascii=False),
+    slim = {n: {"config": c["config"],
+                "methods": {m: {k: v for k, v in mv.items()
+                                if k not in ("per_type", "counts")}
+                            for m, mv in c["methods"].items()}}
+            for n, c in results.items()}
+    Path(args.out).write_text(json.dumps(slim, indent=1, ensure_ascii=False),
                               encoding="utf-8")
+    if args.detail:
+        Path(args.detail).write_text(
+            json.dumps(results, indent=1, ensure_ascii=False), encoding="utf-8")
+        print(f"[done] detail (per_type/counts) -> {args.detail}")
     lines = ["cell,grid,streams,calib_cooldown,calib_tol,method,kw,calib_f1,test_f1"]
     for name, c in results.items():
         for m, v in c["methods"].items():
