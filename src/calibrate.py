@@ -173,7 +173,7 @@ def calibrate_baseline(stream, method: str, *,
     candidates: List[Dict] = []
     if mode == "joint":
         keys = list(grid)
-        for combo in _product([grid[k] for k in keys]):
+        for combo in _product(*[grid[k] for k in keys]):
             candidates.append(dict(zip(keys, combo)))
     else:
         for key, values in grid.items():
