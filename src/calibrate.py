@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+from itertools import product as _product
 from typing import Dict, List, Optional, Sequence
 
 import numpy as np
@@ -114,27 +115,84 @@ def calibrate_ontoevolve(streams: Sequence[ControlledStream], *,
     return {**best, "n_trials": n_trials, "trials": trials}
 
 
-def calibrate_baseline(stream: ControlledStream, method: str, *,
+
+def _prep_calib_streams(streams):
+    """为每条标定流各建一次 O_0（不能跨流复用同一个本体对象）。"""
+    if isinstance(streams, ControlledStream):
+        streams = [streams]
+    prepared = []
+    for st in streams:
+        onto, info = build_initial_ontology(
+            st.pool, st.d0_iids, seed=0, k_gt=len(st.vocab_base),
+            vocab={**st.vocab_base, **st.vocab_emer})
+        prepared.append((onto, info["leaf_to_cid"], st))
+    return prepared
+
+
+def _baseline_f1(onto, leaf_to_cid, stream, method, base_params, kw) -> float:
+    mon = BaselineMonitor(onto, method, params=base_params, **kw)
+    alarms: List[Alarm] = []
+    for t, items in enumerate(stream.batches, start=1):
+        alarms.extend(mon.observe(t, items))
+    res = match_events(stream.events, alarms, leaf_to_cid,
+                       delay_tol=base_params.delay_tol, typed=False)
+    return float(res.macro_f1)
+
+
+def calibrate_baseline(stream, method: str, *,
                        base_params: C.DriftParams, seed: int = 0,
                        verbose: bool = True,
-                       cooldown: Optional[int] = None) -> Dict:
-    """在标定流上选择基线的超参数（共享同一个 O_0）。"""
-    onto, info = build_initial_ontology(
-        stream.pool, stream.d0_iids, seed=0, k_gt=len(stream.vocab_base),
-        vocab={**stream.vocab_base, **stream.vocab_emer})
-    leaf_to_cid = info["leaf_to_cid"]
-    grid = BASELINE_GRID[method]
+                       cooldown: Optional[int] = None,
+                       calib_cooldown: Optional[int] = None,
+                       grid: Optional[Dict[str, Sequence]] = None,
+                       mode: str = "legacy",
+                       return_trials: bool = False) -> Dict:
+    """在标定流上选择基线的超参数。
+
+    参数
+    ----
+    stream : 单条标定流，或标定流序列。多条时每流独立建 O_0、独立跑监视器，
+             取 macro-F1 的算术平均作为选择准则（与 OntoEvolve 的准则一致）。
+    cooldown : 保留的历史参数，**不参与计算**（V23 行为）；新增的
+             `calib_cooldown` 才真正把告警抑制窗口带进标定。
+    grid : 覆盖 BASELINE_GRID[method] 的候选网格。
+    mode : "legacy" 逐键分轮搜索（V23 行为，每轮另一键取默认值）；
+           "joint" 按键做笛卡尔积联合搜索。
+    """
+    prepared = _prep_calib_streams(stream)
+    grid = grid if grid is not None else BASELINE_GRID[method]
+    fixed = {} if calib_cooldown is None else {"cooldown": int(calib_cooldown)}
+    trials: List[Dict] = []
+
+    def score(kw: Dict) -> tuple:
+        per = [_baseline_f1(onto, l2c, st, method, base_params, {**kw, **fixed})
+               for onto, l2c, st in prepared]
+        return float(np.mean(per)), per
+
     best = {"macro_f1": -1.0, "kw": {}}
-    for key, values in grid.items():
-        for v in values:
-            mon = BaselineMonitor(onto, method, params=base_params, **{key: v})
-            alarms: List[Alarm] = []
-            for t, items in enumerate(stream.batches, start=1):
-                alarms.extend(mon.observe(t, items))
-            res = match_events(stream.events, alarms, leaf_to_cid,
-                               delay_tol=base_params.delay_tol, typed=False)
-            if res.macro_f1 > best["macro_f1"]:
-                best = {"macro_f1": res.macro_f1, "kw": {key: v}}
+    candidates: List[Dict] = []
+    if mode == "joint":
+        keys = list(grid)
+        for combo in _product([grid[k] for k in keys]):
+            candidates.append(dict(zip(keys, combo)))
+    else:
+        for key, values in grid.items():
+            for v in values:
+                candidates.append({key: v})
+    for kw in candidates:
+        m, per = score(kw)
+        trials.append({"kw": dict(kw), "mean": m, "per_stream": per})
+        # 并列时保留网格顺序中的第一个候选（显式规则，冻结在协议里）
+        if m > best["macro_f1"]:
+            best = {"macro_f1": m, "kw": dict(kw)}
     if verbose:
-        print(f"[calib] {method:<14} best macroF1={best['macro_f1']:.3f} {best['kw']}")
-    return best
+        print(f"[calib] {method:<14} best macroF1={best['macro_f1']:.3f} "
+              f"{best['kw']} streams={len(prepared)} mode={mode} "
+              f"calib_cooldown={calib_cooldown}")
+    out = {**best, "n_evals": len(trials), "n_streams": len(prepared),
+           "mode": mode, "calib_cooldown": calib_cooldown,
+           "tie_rule": "first_in_grid_order"}
+    if return_trials:
+        out["trials"] = trials
+    return out
+
