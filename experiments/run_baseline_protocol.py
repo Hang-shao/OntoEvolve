@@ -160,9 +160,17 @@ def main() -> int:
                       "fp": [int(r.fp) for r in rres],
                       "fn": [int(r.fn) for r in rres],
                       "n_alarms": [int(r.n_alarms) for r in rres]}
+            per_type_pr = {k: {"p": [float(r.per_type[k]["p"]) for r in rres],
+                               "r": [float(r.per_type[k]["r"]) for r in rres],
+                               "tp": [float(r.per_type[k]["tp"]) for r in rres],
+                               "fp": [float(r.per_type[k]["fp"]) for r in rres],
+                               "fn": [float(r.per_type[k]["fn"]) for r in rres]}
+                           for k in rres[0].per_type}
             cell[method] = {"kw": kw["kw"], "calib_f1": kw["macro_f1"],
                             "n_evals": kw["n_evals"], "per_repeat": per,
                             "mean": mean, "per_type": per_type,
+                            "per_type_pr": per_type_pr,
+                            "n_events": [int(r.n_events) for r in rres],
                             "counts": counts,
                             "seconds": round(time.time() - t1, 1)}
             print(f"[{name}] {method:<14} kw={kw['kw']} calib={kw['macro_f1']:.4f} "
@@ -179,7 +187,14 @@ def main() -> int:
             "counts": {"tp": [int(r.tp) for r in mres],
                        "fp": [int(r.fp) for r in mres],
                        "fn": [int(r.fn) for r in mres],
-                       "n_alarms": [int(r.n_alarms) for r in mres]}}
+                       "n_alarms": [int(r.n_alarms) for r in mres]},
+            "per_type_pr": {k: {"p": [float(r.per_type[k]["p"]) for r in mres],
+                                "r": [float(r.per_type[k]["r"]) for r in mres],
+                                "tp": [float(r.per_type[k]["tp"]) for r in mres],
+                                "fp": [float(r.per_type[k]["fp"]) for r in mres],
+                                "fn": [float(r.per_type[k]["fn"]) for r in mres]}
+                            for k in mres[0].per_type},
+            "n_events": [int(r.n_events) for r in mres]}
         print(f"[{name}] ontoevolve     test={cell['ontoevolve']['mean']:.4f}")
         results[name] = {"config": {"grid": grid_key, "n_streams": n_streams,
                                     "calib_cooldown": calib_cd,
@@ -188,7 +203,8 @@ def main() -> int:
 
     slim = {n: {"config": c["config"],
                 "methods": {m: {k: v for k, v in mv.items()
-                                if k not in ("per_type", "counts")}
+                                if k not in ("per_type", "per_type_pr", "counts",
+                                             "n_events")}
                             for m, mv in c["methods"].items()}}
             for n, c in results.items()}
     Path(args.out).write_text(json.dumps(slim, indent=1, ensure_ascii=False),
