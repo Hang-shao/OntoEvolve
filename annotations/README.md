@@ -42,3 +42,18 @@
 `human_eval_for_scoring.csv` 的 `human_score` 全部为空，说明"人工评分 + κ"这条线尚未做。
 `compute_human_kappa.py` 已就绪，补齐两列后即可给出 Cohen's κ 与混淆矩阵。
 论文目前不依赖这条线：Section 4.5.1 用的是两个 LLM judge 与确定性判据的交叉验证。
+
+## 四、双人盲评（Major 5：材料已就绪，尚未执行）
+
+| 项 | 位置 | 说明 |
+|---|---|---|
+| 打分表 | `dist/rater_pack/rater_R2.csv`、`rater_R3.csv` | 同一批 85 条、行序不同；**不入库**（`dist/` 已在 `.gitignore` 中，表内含 PMC 摘要原句与 ICEWS 事件记录） |
+| 表清单 | `dist/rater_pack/rater_sheet_manifest.json` | 两份表的 sha256、行数、源备份哈希 |
+| 判定规则 | `annotations/rater_review/rater_instructions_EN.md`、`_ZH.md` | 三类漂移的判定规则、决策树、5 个虚构示例、纪律（不查语料、不互看、不改表结构） |
+| 邀请邮件 | `annotations/rater_review/email_request_template.md` | 中英双语，含独立性与致谢条款 |
+| 作者手册 | `annotations/rater_review/README_runbook_zh.md` | 发送/禁发清单、评分与仲裁命令、论文写法模板、六个坑 |
+| 脚本 | `scripts/build_rater_sheets.py`、`scripts/score_rater_agreement.py` | 前者按白名单生成打分表并断言黑名单列未泄漏；后者给 α/κ/PABAK、正负一致率、Wilson 区间、仲裁清单，`--selftest` 自检数学 |
+
+现状：**未执行**——缺两位独立标注者与一位仲裁人。发布版的 `alarm_pack.csv` 已脱敏（见第一节），
+第二标注者必须使用本地 `dist/annotations_backup-*/alarm_pack.csv`，因此第三方无法从本仓库复现
+判定本身，只能复现流程与脚本；这一点须在论文中说明。
