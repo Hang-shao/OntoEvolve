@@ -16,7 +16,9 @@ import numpy as np
 
 from . import config as C
 from .embedding import Embedder
-from .vocab import (ADJECTIVES, BASE_TREE, EMERGENCE_TREE, OP_VOCAB,
+from dataclasses import replace as _dc_replace
+
+from .vocab import (ADJECTIVES, BASE_TREE, DP_VALUES, EMERGENCE_TREE, OP_VOCAB,
                     RANGE_VOCAB, LeafSchema, build_vocab, instance_text)
 
 NOISE_LEAF = "__noise__"
@@ -59,6 +61,7 @@ class DriftEvent:
     t_start: int
     t_declare: int
     attrs: Dict[str, bool] = field(default_factory=dict)
+    subtype: str = ""           # 重定义子类型（默认 ""，即原来的混合族）
 
     @property
     def difficulty(self) -> str:
@@ -83,6 +86,41 @@ class ControlledStream:
 # -----------------------------------------------------------------------------
 # 事件选取（在构建实例池之前确定，只为重定义目标生成 alt 变体）
 # -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# 重定义子类型（默认关闭）：只改 alt 变体的槽位，不改事件/批次/真值规则
+# -----------------------------------------------------------------------------
+REDEF_SUBTYPES = ("range_only", "dp_only", "card_only")
+
+
+def subtype_alt_schema(schema: LeafSchema, subtype: str) -> LeafSchema:
+    """返回 alt 变体只表达 `subtype` 那一个族的 schema 副本。
+
+    range_only：谓词集合与槽位数都不变，只把一个关系的对象换成"同类的第三个类"；
+    dp_only   ：关系完全不变，只把一个数据属性的**取值**换掉；
+    card_only ：谓词集合不变，多一个槽位（重复第二个关系），使基数 2→3。
+    其他取值（含 ""/default）原样返回，即原来的混合族。
+    """
+    if subtype in ("", "default"):
+        return schema
+    if subtype not in REDEF_SUBTYPES:
+        raise ValueError(f"unknown redefinition subtype: {subtype}")
+
+    if subtype == "range_only":
+        (op0, r0), (op1, r1) = schema.ops[0], schema.ops[1]
+        used = {r0, r1}
+        cand = [r for r in RANGE_VOCAB if r not in used]
+        return _dc_replace(schema, alt_ops=[(op0, r0), (op1, str(cand[0]))])
+
+    if subtype == "dp_only":
+        dp0, v0 = schema.dps[0]
+        others = [v for v in DP_VALUES[dp0] if v != v0]
+        return _dc_replace(schema, alt_ops=list(schema.ops),
+                           dps=[(dp0, str(others[0]))] + list(schema.dps[1:]))
+
+    # card_only
+    return _dc_replace(schema, alt_ops=list(schema.ops) + [schema.ops[1]])
+
+
 def select_events(vocab_base: Dict[str, LeafSchema],
                   vocab_emer: Dict[str, LeafSchema], *, seed: int = 0,
                   params: Optional[C.DriftParams] = None) -> List[Dict]:
@@ -138,11 +176,13 @@ def select_events(vocab_base: Dict[str, LeafSchema],
 def build_pool(embedder: Embedder, vocab_base: Dict[str, LeafSchema],
                vocab_emer: Dict[str, LeafSchema], *, seed: int = 0,
                params: Optional[C.DriftParams] = None,
-               alt_leaves: Sequence[str] = ()) -> Tuple[
+               alt_leaves: Sequence[str] = (),
+               alt_schemas: Optional[Dict[str, LeafSchema]] = None) -> Tuple[
                    List[PoolItem], Dict[str, List[int]]]:
     """构建实例池（一次性嵌入，各重复实验复用向量）。"""
     params = params or C.PARAMS
     alt_set = set(alt_leaves)
+    alt_schemas = alt_schemas or {}
     all_vocab = {**vocab_base, **vocab_emer}
     rng = np.random.default_rng(seed + 7)
 
@@ -157,12 +197,13 @@ def build_pool(embedder: Embedder, vocab_base: Dict[str, LeafSchema],
                 op_slots=list(schema.ops), dp_slots=list(schema.dps)))
             iid += 1
         if leaf in alt_set:
+            alt = alt_schemas.get(leaf, schema)
             for k in range(params.pool_per_leaf):
                 adj = ADJECTIVES[(k + 3) % len(ADJECTIVES)]
                 pool.append(PoolItem(
-                    iid=iid, leaf=leaf, sup=schema.parent, variant="alt",
-                    text=instance_text(adj, schema, variant="alt"),
-                    op_slots=list(schema.alt_ops), dp_slots=list(schema.dps)))
+                    iid=iid, leaf=leaf, sup=alt.parent, variant="alt",
+                    text=instance_text(adj, alt, variant="alt"),
+                    op_slots=list(alt.alt_ops), dp_slots=list(alt.dps)))
                 iid += 1
 
     # 噪声实例：文本与普通实例同分布（避免制造假的“新域”语义信号），
@@ -281,7 +322,8 @@ def generate_stream(pool: Sequence[PoolItem], vocab_base: Dict[str, LeafSchema],
             continue
         events.append(DriftEvent(leaf=m["leaf"], dtype=m["dtype"],
                                  t_start=int(m["t_start"]), t_declare=t_dec,
-                                 attrs=dict(m["attrs"])))
+                                 attrs=dict(m["attrs"]),
+                                 subtype=str(m.get("subtype", ""))))
 
     d0_iids: List[int] = []
     for leaf in base_leaves:
@@ -331,7 +373,9 @@ def _declare_batch(batches: Sequence[Sequence[Occurrence]], leaf: str,
 def make_controlled_stream(embedder: Embedder, *, seed: int = 0,
                            params: Optional[C.DriftParams] = None,
                            vocab_seed: int = 0,
-                           alt_all_base: bool = True) -> ControlledStream:
+                           alt_all_base: bool = True,
+                           redef_subtypes: Optional[Sequence[str]] = None
+                           ) -> ControlledStream:
     """一键构建：词表 → 事件 → 实例池 → 批次 → 真值。
 
     alt_all_base=True 时为所有基类概念生成“重定义”变体，使实例池与随机种子
@@ -341,11 +385,20 @@ def make_controlled_stream(embedder: Embedder, *, seed: int = 0,
     vocab_base = build_vocab(seed=vocab_seed, tree=BASE_TREE)
     vocab_emer = build_vocab(seed=vocab_seed + 1000, tree=EMERGENCE_TREE)
     metas = select_events(vocab_base, vocab_emer, seed=seed, params=params)
+    alt_schemas: Dict[str, LeafSchema] = {}
+    if redef_subtypes:
+        red_metas = sorted((m for m in metas if m["dtype"] == "redefinition"),
+                           key=lambda m: str(m["leaf"]))
+        for i, m in enumerate(red_metas):
+            m["subtype"] = str(redef_subtypes[i % len(redef_subtypes)])
+        alt_schemas = {m["leaf"]: subtype_alt_schema(vocab_base[str(m["leaf"])], m["subtype"])
+                       for m in red_metas}
     if alt_all_base:
         alt_leaves = list(vocab_base.keys())
     else:
         alt_leaves = [m["leaf"] for m in metas if m["dtype"] == "redefinition"]
     pool, alt_pool = build_pool(embedder, vocab_base, vocab_emer, seed=vocab_seed,
-                                params=params, alt_leaves=alt_leaves)
+                                params=params, alt_leaves=alt_leaves,
+                                alt_schemas=alt_schemas)
     return generate_stream(pool, vocab_base, vocab_emer, metas, seed=seed,
                            params=params, alt_pool=alt_pool)
