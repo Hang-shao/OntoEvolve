@@ -23,6 +23,8 @@ OUT = Path(os.getenv("ONTOEVOLVE_FIG_DIR", str(ROOT / "figures")))
 OUT.mkdir(parents=True, exist_ok=True)
 
 S.use(8.5)
+FS = 8.5        # 数值标签
+FST = 8.0       # 刻度与图例
 
 ORDER = ["ontoevolve", "adwin", "inc_clustering", "embdist", "embkmeans", "page_hinkley"]
 LABEL = {"ontoevolve": "OntoEvolve\n(ours)", "adwin": "ADWIN",
@@ -41,7 +43,7 @@ def bar(ax, x, y, w, k, **kw):
 def main():
     src = Path(os.getenv("ONTOEVOLVE_FIG_SRC", str(ROOT / "results/exp1_summary.json")))
     m = json.loads(src.read_text(encoding="utf-8"))["methods"]
-    fig, axes = plt.subplots(1, 2, figsize=(7.2, 3.0),
+    fig, axes = plt.subplots(1, 2, figsize=(7.4, 3.05),
                              gridspec_kw={"width_ratios": [1.0, 1.3]})
 
     # ---- (a) macro-F1 + 95% CI
@@ -55,10 +57,10 @@ def main():
     ax.errorbar(x, val, yerr=[val - lo, hi - val], fmt="none", ecolor=S.INK,
                 elinewidth=0.8, capsize=2.6, zorder=8)
     for i, (v, h) in enumerate(zip(val, hi)):
-        ax.text(i, h + 0.025, "%.3f" % v, ha="center", va="bottom", fontsize=7.4)
+        ax.text(i, h + 0.025, "%.3f" % v, ha="center", va="bottom", fontsize=FS)
     ax.set_xticks(x)
-    ax.set_xticklabels([LABEL[k] for k in ORDER], fontsize=7.2,
-                       rotation=24, ha="right", rotation_mode="anchor")
+    ax.set_xticklabels([LABEL[k] for k in ORDER], fontsize=FST,
+                       rotation=32, ha="right", rotation_mode="anchor")
     ax.set_ylabel("Macro-F1")
     ax.set_ylim(0, 1.05)
     S.panel_title(ax, "(a) Detection accuracy")
@@ -74,11 +76,11 @@ def main():
         if k == "ontoevolve":
             for r, y in zip(b, ys):
                 ax.text(r.get_x() + r.get_width() / 2, y + 0.025, "%.3f" % y,
-                        ha="center", va="bottom", fontsize=6.8)
+                        ha="center", va="bottom", fontsize=FST, rotation=90)
     ax.set_xticks(xi)
     ax.set_xticklabels([S.TYPE_LABEL[t] for t in TYPES])
     ax.set_ylabel("F1 by drift type")
-    ax.set_ylim(0, 1.05)
+    ax.set_ylim(0, 1.16)      # 给竖排数值标签留出顶部空间
     S.panel_title(ax, "(b) Per-type breakdown")
     S.axis_style(ax)
 
@@ -86,9 +88,9 @@ def main():
                      edgecolor=S.INK, linewidth=0.6, label=S.METHOD_LABEL[k])
                for k in ORDER]
     fig.legend(handles=handles, loc="lower center", ncol=6,
-               fontsize=7.4, handlelength=1.1, handleheight=0.9,
-               handletextpad=0.45, columnspacing=1.1)
-    fig.subplots_adjust(wspace=0.26, left=0.075, right=0.99, top=0.9, bottom=0.30)
+               fontsize=FST, handlelength=1.1, handleheight=0.9,
+               handletextpad=0.45, columnspacing=0.9)
+    fig.subplots_adjust(wspace=0.26, left=0.075, right=0.99, top=0.90, bottom=0.32)
     for ext in ("png", "pdf"):
         fig.savefig(OUT / ("fig2_drift_f1." + ext), bbox_inches="tight")
     plt.close(fig)
