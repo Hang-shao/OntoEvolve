@@ -164,7 +164,7 @@ def fig5():
                    bbox_to_anchor=(1.05, -0.12))
     fig.tight_layout()
     for ext in ("png", "pdf"):
-        fig.savefig(OUT / f"fig5_qa_comparison.{ext}", bbox_inches="tight")
+        fig.savefig(OUT / f"fig6_qa_comparison.{ext}", bbox_inches="tight")
     plt.close(fig)
     print("fig5 done")
 
@@ -198,7 +198,7 @@ def fig6():
               bbox_to_anchor=(0.5, -0.14))
     fig.tight_layout()
     for ext in ("png", "pdf"):
-        fig.savefig(OUT / f"fig6_antifraud_comparison.{ext}", bbox_inches="tight")
+        fig.savefig(OUT / f"fig7_antifraud_comparison.{ext}", bbox_inches="tight")
     plt.close(fig)
     print("fig6 done")
 

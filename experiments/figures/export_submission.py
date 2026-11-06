@@ -23,9 +23,10 @@ FIGS = {
     1: "fig1_architecture",
     2: "fig2_drift_f1",
     3: "fig3_component_ablation",
-    4: "fig4_cost_speedup",
-    5: "fig5_qa_comparison",
-    6: "fig6_antifraud_comparison",
+    4: "fig4_alert_budget",
+    5: "fig5_cost_speedup",
+    6: "fig6_qa_comparison",
+    7: "fig7_antifraud_comparison",
 }
 MIN_DPI = 600
 

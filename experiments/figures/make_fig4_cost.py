@@ -91,7 +91,7 @@ def main():
 
     fig.tight_layout()
     for ext in ("png", "pdf"):
-        fig.savefig(OUT / f"fig4_cost_speedup.{ext}", bbox_inches="tight")
+        fig.savefig(OUT / f"fig5_cost_speedup.{ext}", bbox_inches="tight")
     plt.close(fig)
     print("inc %.2f  per-batch %.2f  periodic %.2f  speed %s  periodic-speed %s"
           % (inc.mean(), full.mean(), per_cum.mean(), np.round(sp, 2), np.round(spp, 2)))
