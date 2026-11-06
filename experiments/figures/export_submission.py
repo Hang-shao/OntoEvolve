@@ -1,4 +1,4 @@
-"""把 fig1—fig6 导出成期刊上传用的独立文件（Fig1…Fig6）。
+"""把 figures/ 里的 8 张图导出成期刊上传用的独立文件（Fig1…Fig8）。
 
 Springer 的图件要求：矢量优先 EPS/PDF，位图用 TIFF，命名 `Fig<编号>`；组合图（含线条与文字）
 最低 600 dpi。仓库里的 png 已按 600 dpi 渲染，这里只做重命名与位图转 TIFF（LZW 无损）。
@@ -21,12 +21,13 @@ FIGDIR = ROOT / "figures"
 # 图号 -> 仓库里的文件名（不含扩展名）
 FIGS = {
     1: "fig1_architecture",
-    2: "fig2_drift_f1",
-    3: "fig3_component_ablation",
-    4: "fig4_alert_budget",
-    5: "fig5_cost_speedup",
-    6: "fig6_qa_comparison",
-    7: "fig7_antifraud_comparison",
+    2: "fig2_lifecycle",
+    3: "fig2_drift_f1",
+    4: "fig3_component_ablation",
+    5: "fig4_alert_budget",
+    6: "fig5_cost_speedup",
+    7: "fig6_qa_comparison",
+    8: "fig7_antifraud_comparison",
 }
 MIN_DPI = 600
 
