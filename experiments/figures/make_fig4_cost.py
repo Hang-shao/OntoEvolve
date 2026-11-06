@@ -15,16 +15,16 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
+import figstyle as S  # noqa: E402
+
 ROOT = Path(__file__).resolve().parents[2]
 OUT = Path(os.getenv("ONTOEVOLVE_FIG_DIR", str(ROOT / "figures")))
 OUT.mkdir(parents=True, exist_ok=True)
 TAG = "t36_full5"
 
-plt.rcParams.update({"font.family": "DejaVu Sans", "font.size": 9,
-                     "axes.linewidth": 0.9, "axes.spines.top": False,
-                     "axes.spines.right": False, "figure.dpi": 150, "savefig.dpi": 600,
-                     "pdf.fonttype": 42, "ps.fonttype": 42})
-DARK, MID, LIGHT = "#333333", "#777777", "#B0B0B0"
+S.use(8.5)
+FS = 8.5
+FT = 8.0
 
 
 def main():
@@ -39,57 +39,64 @@ def main():
     ci = agg["speedup_cumulative"]["ci95"]
     cip = agg["periodic_speedup"]["ci95"]
 
-    fig, axes = plt.subplots(1, 2, figsize=(7.4, 2.9),
+    fig, axes = plt.subplots(1, 2, figsize=(7.4, 3.0),
                              gridspec_kw={"width_ratios": [1.0, 1.25]})
 
     # ---- (a) 三条路径的累计耗时 ----
     ax = axes[0]
-    series = [("Incremental\nevolution", inc, DARK),
-              ("Per-batch\nfull rebuild", full, LIGHT),
-              ("Periodic\nrebuild (P = 5)", per_cum, MID)]
+    series = [("Incremental\nevolution", inc, S.NAVY, ""),
+              ("Per-batch\nfull rebuild", full, S.GREY, ""),
+              ("Periodic\nrebuild (P = 5)", per_cum, S.SKY, "")]
     x = np.arange(len(series))
     means = [s[1].mean() for s in series]
     errs = [s[1].std(ddof=1) for s in series]
     ax.bar(x, means, yerr=errs, capsize=3, width=0.6,
-           color=[s[2] for s in series], edgecolor="black", linewidth=0.6,
-           error_kw={"elinewidth": 0.8, "ecolor": "black"})
+           color=[s[2] for s in series], hatch=[s[3] for s in series],
+           edgecolor=S.INK, linewidth=0.6,
+           error_kw={"elinewidth": 0.8, "ecolor": S.INK},
+           zorder=3)
     for xi, m in zip(x, means):
-        ax.text(xi, m * 1.22, "%.1f s" % m, ha="center", va="bottom", fontsize=7.2)
+        ax.text(xi, m * 1.24, "%.1f s" % m, ha="center", va="bottom", fontsize=FS)
     ax.set_yscale("log")
     ax.set_ylim(min(means) * 0.45, max(means) * 4.0)
     ax.set_xlim(-0.65, len(series) - 0.35)
     ax.set_xticks(x)
-    ax.set_xticklabels([s[0] for s in series], fontsize=7.2)
-    ax.set_ylabel("Cumulative time (s, log scale)")
-    ax.set_title("(a) Cumulative cost over T = 36 batches", fontsize=9, loc="left")
-    ax.text(0.03, 0.97, "mean ± std over %d seeds" % len(inc),
-            transform=ax.transAxes, fontsize=6.5, va="top")
+    ax.set_xticklabels([s[0] for s in series], fontsize=FT)
+    ax.set_ylabel("Cumulative time (s, log scale)", labelpad=2)
+    S.panel_title(ax, "(a) Cumulative cost over T = 36 batches")
+    S.axis_style(ax)
 
     # ---- (b) 逐种子加速比 ----
     ax2 = axes[1]
     xs = np.arange(len(sp))
     w = 0.38
-    ax2.bar(xs - w / 2, sp, width=w, color=MID, edgecolor="black", linewidth=0.6,
-            zorder=2, label="vs per-batch rebuild")
-    ax2.bar(xs + w / 2, spp, width=w, color="#D9D9D9", edgecolor="black", linewidth=0.6,
-            hatch="//", zorder=2, label="vs periodic rebuild (P = 5)")
-    ax2.axhspan(ci[0], ci[1], color="0.88", zorder=0)
-    ax2.axhspan(cip[0], cip[1], color="0.94", zorder=0)
-    ax2.axhline(10, color="black", linestyle="--", linewidth=0.8, zorder=1)
+    ax2.axhspan(ci[0], ci[1], color=S.PALE, zorder=0)
+    ax2.axhspan(cip[0], cip[1], color="#FBEDE5", zorder=0)
+    ax2.bar(xs - w / 2, sp, width=w, color=S.NAVY, edgecolor=S.INK, linewidth=0.6,
+            zorder=3, label="vs per-batch rebuild")
+    ax2.bar(xs + w / 2, spp, width=w, color=S.SKY, hatch="//", edgecolor=S.INK,
+            linewidth=0.6, zorder=3, label="vs periodic rebuild (P = 5)")
+    ax2.axhline(10, color=S.GREY, linestyle=(0, (4, 2)), linewidth=0.9, zorder=2)
+    ax2.text(-0.55, 10.5, "10\u00d7", fontsize=FT, color=S.GREY,
+             ha="left", va="bottom")
     for xi, v in zip(xs - w / 2, sp):
-        ax2.text(xi, v * 1.02, "%.1f" % v, ha="center", va="bottom", fontsize=6.2)
+        ax2.text(xi, v * 1.02, "%.1f" % v, ha="center", va="bottom", fontsize=FS,
+                 rotation=90)
     for xi, v in zip(xs + w / 2, spp):
-        ax2.text(xi, v * 1.02, "%.1f" % v, ha="center", va="bottom", fontsize=6.2)
-    ax2.set_ylim(0, max(sp) * 1.45)
+        ax2.text(xi, v * 1.02, "%.1f" % v, ha="center", va="bottom", fontsize=FS,
+                 rotation=90)
+    ax2.set_ylim(0, max(sp) * 1.58)
+    ax2.set_xlim(-0.6, len(sp) - 0.4)
     ax2.set_xticks(xs)
-    ax2.set_xticklabels(["seed %d" % r["seed"] for r in per], fontsize=7.5)
-    ax2.set_ylabel("Cumulative speed-up (×)")
-    ax2.set_title("(b) Speed-up per seed", fontsize=9, loc="left")
-    ax2.legend(frameon=False, fontsize=6.4, loc="upper center", ncol=2,
-               bbox_to_anchor=(0.5, 1.02), handlelength=1.2, handletextpad=0.4,
-               columnspacing=1.0)
+    ax2.set_xticklabels(["seed %d" % r["seed"] for r in per], fontsize=FT)
+    ax2.set_ylabel("Cumulative speed-up (\u00d7)", labelpad=2)
+    S.panel_title(ax2, "(b) Speed-up per seed")
+    S.axis_style(ax2)
+    ax2.legend(frameon=False, fontsize=FS, loc="upper center", ncol=2,
+               bbox_to_anchor=(0.5, 1.03), handlelength=1.2, handletextpad=0.45,
+               columnspacing=1.4)
 
-    fig.tight_layout()
+    fig.subplots_adjust(wspace=0.30, left=0.10, right=0.985, top=0.86, bottom=0.16)
     for ext in ("png", "pdf"):
         fig.savefig(OUT / f"fig5_cost_speedup.{ext}", bbox_inches="tight")
     plt.close(fig)

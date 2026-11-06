@@ -37,6 +37,8 @@ import matplotlib.pyplot as plt  # noqa: E402
 from matplotlib.lines import Line2D  # noqa: E402
 from matplotlib.patches import Patch, Rectangle  # noqa: E402
 
+import figstyle as S  # noqa: E402
+
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "experiments"))
@@ -58,22 +60,20 @@ REPEATS = 10
 TOL = 3
 MEAN_OE, MEAN_ADWIN = 0.7782, 0.3963
 
-plt.rcParams.update({"font.family": "DejaVu Sans", "font.size": 9,
-                     "axes.linewidth": 0.9, "axes.spines.top": False,
-                     "axes.spines.right": False, "figure.dpi": 150, "savefig.dpi": 600,
-                     "pdf.fonttype": 42, "ps.fonttype": 42})
+S.use(9.0)
 
-INK = "#1a1a1a"
-MID = "#4d4d4d"
-LIGHT = "#b3b3b3"
-FAINT = "#cccccc"
-BAND = "#e6e6e6"
-GRID = "#dcdcdc"
+INK = S.INK
+GREY = S.GREY
+GRID = S.GRID
+NAVY = S.NAVY
+FAINT = "#C8C8C8"
+TYPE_COLOR = S.TYPE_COLOR
+TYPE_FILL = S.TYPE_FILL
+TYPE_MARK = S.TYPE_MARK
 
 Y_EM, Y_EXT, Y_RED = 3.00, 2.60, 2.20
 Y_OE, Y_AD = 1.15, 0.40
 TIER = {"emergence": Y_EM, "extinction": Y_EXT, "redefinition": Y_RED}
-MARK = {"emergence": "o", "extinction": "s", "redefinition": "^"}
 
 
 def gather(repeat: int, l2c: dict, raw: dict, emb) -> dict:
@@ -105,16 +105,17 @@ def draw(d: dict) -> None:
     for y in (Y_OE, Y_AD):
         ax.axhline(y, color=GRID, linewidth=0.5, zorder=0)
 
-    # --- 真值：±3 命中窗、t_start 刻线、t_declare 标记（形状即类型）
+    # --- 真值：±3 命中窗（按类型的浅色）、t_start 刻线、t_declare 标记（形状+颜色即类型）
     for ev in events:
         y = TIER[ev.dtype]
         ax.add_patch(Rectangle((ev.t_declare - TOL - 0.5, y - 0.135), 2 * TOL + 1, 0.27,
-                               facecolor=BAND, edgecolor="none", zorder=1))
-        ax.plot([ev.t_start, ev.t_start], [y - 0.20, y + 0.20], color=MID, lw=1.0, zorder=3)
-        ax.plot([ev.t_declare], [y], marker=MARK[ev.dtype], ms=5.0, mfc=INK, mec=INK,
-                zorder=4)
+                               facecolor=TYPE_FILL[ev.dtype], edgecolor="none", zorder=1))
+        ax.plot([ev.t_start, ev.t_start], [y - 0.20, y + 0.20],
+                color=TYPE_COLOR[ev.dtype], lw=1.2, zorder=3)
+        ax.plot([ev.t_declare], [y], marker=TYPE_MARK[ev.dtype], ms=6.0,
+                mfc=TYPE_COLOR[ev.dtype], mec=INK, mew=0.7, zorder=4)
 
-    # --- 本方法：命中画带类型实心标记并连线到对应事件，未命中画 ×
+    # --- 本方法：命中画带类型形状的深蓝标记并连线到对应事件，未命中画 ×
     for j, a in enumerate(alarms["alarms"]):
         if not (0.5 <= a.t <= 36.5):
             continue
@@ -122,38 +123,42 @@ def draw(d: dict) -> None:
             ev = events[alarms["used"].index(j)]
             ax.plot([a.t, ev.t_declare], [Y_OE + 0.09, TIER[ev.dtype] - 0.24],
                     color=FAINT, lw=0.6, zorder=2)
-            ax.plot([a.t], [Y_OE], marker=MARK.get(a.dtype, "o"), ms=5.0,
-                    mfc=INK, mec=INK, zorder=5)
+            ax.plot([a.t], [Y_OE], marker=TYPE_MARK.get(a.dtype, "o"), ms=5.4,
+                    mfc=NAVY, mec="white", mew=0.9, zorder=5)
         else:
-            ax.plot([a.t], [Y_OE], marker="x", ms=4.8, mec=MID, mew=1.1, zorder=5)
+            ax.plot([a.t], [Y_OE], marker="x", ms=5.0, mec=GREY, mew=1.2, zorder=5)
 
     # --- ADWIN：无类型；实心=命中，空心=未命中（误报）
     for j, a in enumerate(d["adwin"]["alarms"]):
         if not (0.5 <= a.t <= 36.5):
             continue
         hit = d["adwin"]["used"].count(j) > 0
-        ax.plot([a.t], [Y_AD], marker="s", ms=4.4, mfc=INK if hit else "none",
-                mec=INK, mew=0.9, zorder=5)
+        ax.plot([a.t], [Y_AD], marker="s", ms=4.6, mfc=GREY if hit else "white",
+                mec=GREY, mew=1.1, zorder=5)
 
     # --- 只留一处标注：窗口锚在 t_declare
     last_em = max((e for e in events if e.dtype == "emergence"), key=lambda e: e.t_declare)
     ax.annotate("\u00b13-batch hit window,\nanchored at t_declare (Section 4.2.4)",
                 xy=(last_em.t_declare + TOL + 0.5, Y_EM + 0.14),
                 xytext=(last_em.t_declare + TOL + 1.2, Y_EM + 0.40),
-                fontsize=8.2, color=MID, ha="left", va="center",
-                arrowprops=dict(arrowstyle="-", lw=0.6, color=LIGHT,
+                fontsize=8.5, color=GREY, ha="left", va="center",
+                arrowprops=dict(arrowstyle="-", lw=0.6, color=FAINT,
                                 connectionstyle="arc3,rad=0.0"))
 
     handles = [
-        Patch(facecolor=BAND, edgecolor="none", label="hit window"),
-        Line2D([], [], color=MID, lw=1.0, label="t_start"),
-        Line2D([], [], color=INK, marker="o", ls="none", ms=5.0, label="t_declare"),
+        Patch(facecolor=TYPE_FILL["emergence"], edgecolor="none", label="hit window"),
+        Line2D([], [], color=TYPE_COLOR["emergence"], lw=1.2, label="t_start"),
+        Line2D([], [], color=TYPE_COLOR["emergence"], marker="o", ls="none", ms=6.0,
+               mec=INK, mew=0.7, label="t_declare"),
         Line2D([], [], color=FAINT, lw=1.0, label="matched alarm"),
-        Line2D([], [], color=MID, marker="x", ls="none", ms=4.8, label="unmatched"),
+        Line2D([], [], color=GREY, marker="x", ls="none", ms=5.0, mew=1.2,
+               label="unmatched"),
+        Line2D([], [], color=GREY, marker="s", ls="none", ms=4.6, mew=1.1,
+               mfc=GREY, label="ADWIN (filled: matched)"),
     ]
-    ax.legend(handles=handles, loc="lower center", bbox_to_anchor=(0.5, -0.40),
-              ncol=5, frameon=False, fontsize=8.4, handletextpad=0.4,
-              columnspacing=1.6)
+    ax.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, -0.22),
+              ncol=3, frameon=False, fontsize=8.5, handletextpad=0.4,
+              columnspacing=1.8, labelspacing=0.5)
     fig.tight_layout()
     png, pdf = OUT / "fig2_lifecycle.png", OUT / "fig2_lifecycle.pdf"
     fig.savefig(png, dpi=600, bbox_inches="tight")
