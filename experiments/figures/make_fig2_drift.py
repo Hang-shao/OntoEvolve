@@ -58,7 +58,8 @@ def finish(ax):
 
 
 def main():
-    m = json.loads((ROOT / "results/exp1_summary.json").read_text(encoding="utf-8"))["methods"]
+    src = Path(os.getenv("ONTOEVOLVE_FIG_SRC", str(ROOT / "results/exp1_summary.json")))
+    m = json.loads(src.read_text(encoding="utf-8"))["methods"]
     fig, axes = plt.subplots(1, 2, figsize=(7.4, 3.0),
                              gridspec_kw={"width_ratios": [1.0, 1.25]})
 
